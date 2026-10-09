@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>Lodinka</title>
+<meta name="theme-color" content="#111827">
+<style>
+:root{color-scheme:dark;--bg:#101522;--panel:#1b2435;--accent:#7c5cff;--text:#f7f8ff;--muted:#aab3c7}
+*{box-sizing:border-box}html,body{margin:0;height:100%;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text);overflow:hidden}
+#app{height:100%;display:flex;flex-direction:column}.top{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:#0b0f19;border-bottom:1px solid #293247;gap:10px}
+.brand{font-weight:900;font-size:22px;letter-spacing:.3px}.brand span{color:#a999ff}.pill{font-size:12px;color:#c9d2e7;background:#202a3e;border:1px solid #36425d;border-radius:999px;padding:6px 10px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 290px;gap:12px;padding:12px;min-height:0;flex:1}
+.game{position:relative;min-height:300px;background:linear-gradient(#18243b,#26334a 55%,#111827);border:1px solid #34415c;border-radius:16px;overflow:hidden}
+canvas{width:100%;height:100%;display:block;touch-action:none}.hud{position:absolute;top:12px;left:12px;right:12px;display:flex;justify-content:space-between;gap:8px;pointer-events:none}.hud span{background:#0b0f19cc;border:1px solid #45516a;padding:8px 10px;border-radius:10px;font-size:13px}
+#notice{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);text-align:center;width:min(90%,360px);padding:18px;background:#0b0f19e8;border:1px solid #52607c;border-radius:16px;box-shadow:0 12px 40px #0006}
+#notice h2{margin:0 0 8px;font-size:24px}#notice p{margin:0 0 14px;color:#d0d8e8;font-size:14px;line-height:1.45}
+button{border:0;border-radius:10px;padding:11px 14px;font-weight:750;background:var(--accent);color:white;cursor:pointer}button.secondary{background:#2b354b;border:1px solid #46536e}button:active{transform:scale(.98)}
+.side{display:flex;flex-direction:column;gap:12px;overflow:auto}.card{background:var(--panel);border:1px solid #34415c;border-radius:14px;padding:14px}.card h3{font-size:15px;margin:0 0 10px}.card p,.small{font-size:13px;color:var(--muted);line-height:1.45;margin:0}.stats{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.stat{background:#111827;border-radius:10px;padding:10px}.stat b{display:block;font-size:20px}.stat span{font-size:11px;color:var(--muted)}
+.controls{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:10px}.controls button{padding:12px 0;font-size:17px}.controls .blank{visibility:hidden}.foot{font-size:11px;color:#7f8aa3;text-align:center;padding:8px}
+@media(max-width:760px){main{grid-template-columns:1fr;grid-template-rows:minmax(280px,1fr) auto;overflow:auto}.game{min-height:52vh}.side{display:grid;grid-template-columns:1fr 1fr}.side .card:first-child{grid-column:1/-1}.stats{grid-template-columns:1fr 1fr}.controls button{padding:10px 0}.foot{display:none}}
+</style>
+</head>
+<body>
+<div id="app">
+<header class="top"><div class="brand">Lodinka<span>!</span></div><div class="pill">BETA · BLOCK OBBY</div></header>
+<main>
+<section class="game" id="game">
+<canvas id="screen" aria-label="Lodinka block obby game"></canvas>
+<div class="hud"><span id="level">LEVEL 1</span><span id="score">COINS 0</span></div>
+<div id="notice"><h2>Welcome to Lodinka!</h2><p>Jump across the floating blocks, collect coins, and reach the green goal. Use the arrow keys or WASD. On mobile, use the buttons.</p><button id="start">Play game</button></div>
+</section>
+<aside class="side">
+<div class="card"><h3>Your adventure</h3><p>Try to reach the finish platform without falling. This is a small playable starter game you can expand.</p><div class="stats"><div class="stat"><b id="coins">0</b><span>COINS</span></div><div class="stat"><b id="best">1</b><span>BEST LEVEL</span></div></div></div>
+<div class="card"><h3>Mobile controls</h3><p>Hold a direction to move. Tap JUMP to hop. You can also use keyboard controls on a computer.</p><div class="controls">
+<button class="blank">·</button><button data-key="up">▲</button><button class="blank">·</button>
+<button data-key="left">◀</button><button data-key="down">▼</button><button data-key="right">▶</button>
+<button class="blank">·</button><button data-key="jump">JUMP</button><button class="blank">·</button>
+</div></div>
+<div class="card"><h3>How to play</h3><p>Move to the next block, jump over gaps, collect the gold coins, then touch the green goal block. If you fall, you restart at the beginning.</p></div>
+</aside>
+</main>
+<div class="foot">Lodinka is an independent fan-made block game and is not affiliated with Roblox.</div>
+</div>
+<script>
+(()=> {
+const canvas=document.getElementById('screen'),ctx=canvas.getContext('2d');
+const notice=document.getElementById('notice'),startBtn=document.getElementById('start');
+const coinLabel=document.getElementById('coins'),scoreLabel=document.getElementById('score'),levelLabel=document.getElementById('level'),bestLabel=document.getElementById('best');
+let W=800,H=500,dpr=1,running=false,coins=0,best=1,keys={},last=0,cam=0;
+const player={x:70,y:0,z:0,vx:0,vy:0,w:24,h:34,on:false};
+let platforms=[],loot=[],goal={x:0,y:0,w:65,h:22};
+function resize(){const r=canvas.getBoundingClientRect();dpr=Math.min(devicePixelRatio||1,2);W=Math.max(320,r.width);H=Math.max(260,r.height);canvas.width=W*dpr;canvas.height=H*dpr;ctx.setTransform(dpr,0,0,dpr,0,0);draw()}
+window.addEventListener('resize',resize);
+function build(){platforms=[];loot=[];let x=20;for(let i=0;i<9;i++){let y=H*.67-(i%3)*35;let w=i===0?130:82;platforms.push({x,y,w,h:18});if(i>0&&i<8)loot.push({x:x+w/2-7,y:y-35,r:8,taken:false});x+=w+42;}goal={x:x-10,y:H*.45,w:80,h:22};player.x=platforms[0].x+25;player.y=platforms[0].y-player.h;player.vx=player.vy=0;player.on=true;cam=0;}
+function worldWidth(){return goal.x+goal.w+80}
+function projectX(x){return x-cam}
+function drawBlock(x,y,w,h,color,edge){ctx.fillStyle=color;ctx.fillRect(x,y,w,h);ctx.fillStyle=edge;ctx.fillRect(x,y+h-5,w,5);ctx.fillStyle='#ffffff22';ctx.fillRect(x,y,w,3)}
+function draw(){if(!ctx)return;ctx.clearRect(0,0,W,H);
+let sky=ctx.createLinearGradient(0,0,0,H);sky.addColorStop(0,'#18243b');sky.addColorStop(1,'#33455f');ctx.fillStyle=sky;ctx.fillRect(0,0,W,H);
+for(let i=0;i<35;i++){let sx=((i*137-cam*.15)%(W+40)+W+40)%(W+40),sy=(i*61)%Math.max(150,H*.65);ctx.fillStyle=i%3?'#ffffff35':'#a999ff55';ctx.fillRect(sx,sy,2,2)}
+ctx.fillStyle='#111827';ctx.fillRect(0,H*.82,W,H*.18);
+platforms.forEach((p,i)=>{let x=projectX(p.x);if(x+p.w<-20||x>W+20)return;drawBlock(x,p.y,p.w,p.h,i===0?'#566a8a':'#5264a5','#303b66')});
+loot.forEach(c=>{if(c.taken)return;let x=projectX(c.x);ctx.beginPath();ctx.arc(x,c.y, c.r,0,Math.PI*2);ctx.fillStyle='#ffd45c';ctx.fill();ctx.lineWidth=3;ctx.strokeStyle='#ffefad';ctx.stroke();ctx.fillStyle='#9b6414';ctx.fillRect(x-1,c.y-4,2,8)});
+let gx=projectX(goal.x);drawBlock(gx,goal.y,goal.w,goal.h,'#36d48b','#147e5a');ctx.fillStyle='#d6ffeb';ctx.font='bold 12px system-ui';ctx.fillText('FINISH',gx+13,goal.y-9);
+let px=projectX(player.x);ctx.fillStyle='#101522';ctx.fillRect(px+2,player.y+player.h-5,player.w,7);drawBlock(px,player.y,player.w,player.h,'#a999ff','#6548d9');ctx.fillStyle='#fff';ctx.fillRect(px+5,player.y+8,4,4);ctx.fillRect(px+15,player.y+8,4,4);ctx.fillStyle='#3d2a80';ctx.fillRect(px+6,player.y+20,12,3);
+if(!running){ctx.fillStyle='#fff';ctx.font='13px system-ui';ctx.fillText('Press Play to start',14,H-16)}
+}
+function reset(){build();running=true;notice.style.display='none';last=performance.now();requestAnimationFrame(loop)}
+function loop(now){if(!running)return;let dt=Math.min((now-last)/16.67,2);last=now;
+const speed=3.1;let dir=(keys.right||keys.d?1:0)-(keys.left||keys.a?1:0);player.vx=dir*speed;player.x+=player.vx*dt;
+if((keys.jump||keys.up||keys.w||keys[' '])&&player.on){player.vy=-10.8;player.on=false}
+player.vy+=.48*dt;player.y+=player.vy*dt;player.on=false;
+for(const p of platforms){if(player.x+player.w>p.x&&player.x<p.x+p.w&&player.y+player.h>=p.y&&player.y+player.h<=p.y+22&&player.vy>=0){player.y=p.y-player.h;player.vy=0;player.on=true}}
+for(const c of loot){if(!c.taken&&Math.abs((player.x+player.w/2)-c.x)<20&&Math.abs((player.y+player.h/2)-c.y)<28){c.taken=true;coins++;coinLabel.textContent=coins;scoreLabel.textContent='COINS '+coins}}
+cam=Math.max(0,Math.min(player.x-W*.28,worldWidth()-W+20));
+if(player.y>H+80){build()}
+if(player.x+player.w>goal.x&&player.x<goal.x+goal.w&&player.y+player.h>goal.y-10&&player.y<goal.y+goal.h){best=Math.max(best,2);bestLabel.textContent=best;running=false;notice.innerHTML='<h2>Level complete! 🎉</h2><p>You reached the goal! Your coins are saved while this page stays open.</p><button id="again">Play again</button>';notice.style.display='block';document.getElementById('again').onclick=reset}
+draw();if(running)requestAnimationFrame(loop)}
+startBtn.onclick=reset;
+const keyMap={ArrowUp:'up',w:'w',W:'w',ArrowLeft:'left',a:'a',A:'a',ArrowRight:'right',d:'d',D:'d',ArrowDown:'down',s:'down',S:'down',' ':' '};
+window.addEventListener('keydown',e=>{const k=keyMap[e.key]||e.key;if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();keys[k]=true;if(!running&&e.key==='Enter')reset()});
+window.addEventListener('keyup',e=>{const k=keyMap[e.key]||e.key;keys[k]=false});
+document.querySelectorAll('[data-key]').forEach(b=>{let k=b.dataset.key;const down=e=>{e.preventDefault();keys[k==='up'?'up':k==='left'?'left':k==='right'?'right':k==='down'?'down':'jump']=true};const up=e=>{e.preventDefault();keys[k==='up'?'up':k==='left'?'left':k==='right'?'right':k==='down'?'down':'jump']=false};b.addEventListener('pointerdown',down);['pointerup','pointercancel','pointerleave'].forEach(ev=>b.addEventListener(ev,up))});
+build();resize();
+})();
+</script>
+</body>
+</html>
